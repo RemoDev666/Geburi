@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PP Erfassung</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="PP Erfassung">
+<meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-192.png">
+<style>
+  :root {
+    --bg: #f2f2f7; --card: #ffffff; --text: #1c1c1e; --muted: #6e6e73;
+    --line: #d1d1d6; --accent: #0a66c2; --accent-text: #ffffff;
+    --pos: #1f7a3a; --neg: #b3261e; --chip: #e5e5ea;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #000000; --card: #1c1c1e; --text: #f2f2f7; --muted: #98989f;
+      --line: #38383a; --accent: #4c9bf0; --accent-text: #000000;
+      --pos: #5fd27f; --neg: #ff7b72; --chip: #2c2c2e;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 17px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+    padding: env(safe-area-inset-top) 0 calc(env(safe-area-inset-bottom) + 24px);
+  }
+  main { max-width: 560px; margin: 0 auto; padding: 0 16px; }
+  header { display: flex; align-items: baseline; justify-content: space-between; padding: 18px 4px 6px; }
+  h1 { font-size: 30px; margin: 0; letter-spacing: -0.02em; }
+  h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em;
+       color: var(--muted); margin: 26px 16px 8px; }
+  .card { background: var(--card); border-radius: 12px; overflow: hidden; }
+  .row { display: flex; align-items: center; gap: 12px; padding: 11px 16px; min-height: 46px;
+         border-bottom: 0.5px solid var(--line); }
+  .row:last-child { border-bottom: 0; }
+  .row > label { flex: 0 0 auto; min-width: 92px; }
+  .row input, .row select {
+    flex: 1 1 auto; min-width: 0; border: 0; background: transparent; color: var(--text);
+    font: inherit; text-align: right; padding: 0; outline: none; -webkit-appearance: none; appearance: none;
+  }
+  .row select { direction: rtl; }
+  .row input[type=date] { min-height: 24px; }
+  .hint { color: var(--muted); font-size: 13px; margin: 8px 16px 0; }
+  .seg { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; padding: 10px; }
+  .seg button {
+    border: 0; border-radius: 9px; padding: 10px 6px; background: var(--chip); color: var(--text);
+    font: inherit; font-size: 15px; font-weight: 500;
+  }
+  .seg button[aria-pressed=true] { background: var(--accent); color: var(--accent-text); }
+  .btn {
+    display: block; width: 100%; border: 0; border-radius: 12px; padding: 14px; margin-top: 14px;
+    background: var(--accent); color: var(--accent-text); font: inherit; font-weight: 600;
+  }
+  .btn.secondary { background: var(--card); color: var(--accent); }
+  .btn:disabled { opacity: .45; }
+  .link { border: 0; background: none; color: var(--accent); font: inherit; padding: 0; }
+  .entry { display: flex; gap: 12px; align-items: center; }
+  .entry .meta { flex: 1; min-width: 0; }
+  .entry .title { font-weight: 500; }
+  .entry .sub { color: var(--muted); font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .amt { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+  .amt.pos { color: var(--pos); } .amt.neg { color: var(--neg); }
+  .del { border: 0; background: none; color: var(--muted); font-size: 22px; padding: 0 0 0 6px; line-height: 1; }
+  .empty { padding: 16px; color: var(--muted); text-align: center; }
+  .acc-row .meta { flex: 1; }
+  .badge { font-size: 12px; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; }
+  .toast {
+    position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 24px); transform: translateX(-50%);
+    background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 20px; font-size: 15px;
+    opacity: 0; transition: opacity .2s; pointer-events: none; max-width: calc(100% - 32px);
+  }
+  .toast.show { opacity: .92; }
+  details summary { cursor: pointer; list-style: none; }
+  details summary::-webkit-details-marker { display: none; }
+  .hidden { display: none !important; }
+  .tax-quick { border: 0; background: var(--chip); color: var(--text); border-radius: 7px; font-size: 13px; padding: 4px 8px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Erfassen</h1>
+    <span class="badge" id="pendingBadge">0 offen</span>
+  </header>
+
+  <!-- Erfassungsformular -->
+  <section id="formSection">
+    <h2>Buchung</h2>
+    <div class="card">
+      <div class="seg" id="typeSeg" role="group" aria-label="Typ">
+        <button type="button" data-type="Zinsen" aria-pressed="true">Zinsen</button>
+        <button type="button" data-type="Gebühren" aria-pressed="false">Gebühren</button>
+        <button type="button" data-type="Zinsbelastung" aria-pressed="false">Zinsbelastung</button>
+        <button type="button" data-type="Gebührenerstattung" aria-pressed="false">Gebührenerstattung</button>
+      </div>
+    </div>
+    <div class="card" style="margin-top:12px">
+      <div class="row"><label for="fAccount">Konto</label><select id="fAccount"></select></div>
+      <div class="row"><label for="fDate">Datum</label><input id="fDate" type="date"></div>
+      <div class="row"><label for="fAmount" id="amountLabel">Bruttozins</label>
+        <input id="fAmount" type="text" inputmode="decimal" placeholder="0.00" autocomplete="off"></div>
+      <div class="row" id="taxRow"><label for="fTax">Steuern</label>
+        <button type="button" class="tax-quick" id="vst35">VST 35 %</button>
+        <input id="fTax" type="text" inputmode="decimal" placeholder="0.00" autocomplete="off"></div>
+      <div class="row"><label for="fNote">Notiz</label>
+        <input id="fNote" type="text" placeholder="optional" autocomplete="off"></div>
+    </div>
+    <p class="hint" id="netHint"></p>
+    <button class="btn" id="saveBtn" type="button">Hinzufügen</button>
+  </section>
+
+  <!-- Offene Buchungen -->
+  <h2>Offen (noch nicht in PP)</h2>
+  <div class="card" id="pendingList"></div>
+  <button class="btn" id="exportBtn" type="button">CSV für Portfolio Performance teilen</button>
+  <p class="hint">Teilen → «In Dateien sichern» → iCloud Drive. Am Mac in PP: Datei → Importieren → CSV-Dateien → Typ «Kontoumsätze».</p>
+
+  <!-- Exportierte Buchungen -->
+  <details id="historyDetails">
+    <summary><h2>Bereits exportiert <span id="histCount"></span> ›</h2></summary>
+    <div class="card" id="historyList"></div>
+    <button class="btn secondary" id="clearHistBtn" type="button">Verlauf löschen</button>
+  </details>
+
+  <!-- Konten -->
+  <h2>Konten</h2>
+  <div class="card" id="accountList"></div>
+  <button class="btn secondary" id="loadFileBtn" type="button">Konten aus PP-Datei laden</button>
+  <input type="file" id="fileInput" class="hidden">
+  <p class="hint" id="fileHint">Wähle deine Portfolio-Performance-Datei in iCloud Drive. Sie wird nur gelesen, nichts verlässt dein iPhone.</p>
+  <details style="margin-top:8px">
+    <summary class="hint" style="color:var(--accent)">Konto manuell hinzufügen</summary>
+    <div class="card" style="margin-top:8px">
+      <div class="row"><label for="mName">Name</label><input id="mName" type="text" placeholder="exakt wie in PP"></div>
+      <div class="row"><label for="mCur">Währung</label><input id="mCur" type="text" maxlength="3" value="CHF" autocapitalize="characters"></div>
+    </div>
+    <button class="btn secondary" id="mAddBtn" type="button">Konto hinzufügen</button>
+  </details>
+</main>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+'use strict';
+// ---------- Storage (try/catch, da Safari im Privatmodus o.ä. werfen kann) ----------
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { toast('Speichern im Browser nicht möglich'); } }
+};
+let accounts = store.get('pp.accounts', []);   // [{name, currency, source}]
+let entries  = store.get('pp.entries', []);    // [{id, type, account, currency, date, gross, tax, note, exported}]
+let curType  = 'Zinsen';
+
+const $ = id => document.getElementById(id);
+const fmt = (n, cur) => new Intl.NumberFormat('de-CH', { style: 'currency', currency: cur || 'CHF' }).format(n);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), 2400); }
+function parseNum(s) {
+  s = String(s || '').trim().replace(/['’\s]/g, '');
+  if (!s) return NaN;
+  // "1.234,56" oder "1234,56" → Komma als Dezimaltrenner
+  if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
+  return Number(s);
+}
+const round2 = n => Math.round(n * 100) / 100;
+const today = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
+const isCredit = t => t === 'Zinsen' || t === 'Gebührenerstattung';
+
+// ---------- Formular ----------
+function setType(t) {
+  curType = t;
+  for (const b of $('typeSeg').children) b.setAttribute('aria-pressed', String(b.dataset.type === t));
+  $('taxRow').classList.toggle('hidden', t !== 'Zinsen');
+  $('amountLabel').textContent = t === 'Zinsen' ? 'Bruttozins' : 'Betrag';
+  updateHint();
+}
+$('typeSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setType(b.dataset.type); });
+$('vst35').addEventListener('click', () => {
+  const g = parseNum($('fAmount').value);
+  if (!(g > 0)) { toast('Zuerst Bruttozins eingeben'); return; }
+  $('fTax').value = round2(g * 0.35).toFixed(2); updateHint();
+});
+function updateHint() {
+  const g = parseNum($('fAmount').value), tax = curType === 'Zinsen' ? (parseNum($('fTax').value) || 0) : 0;
+  const acc = accounts.find(a => a.name === $('fAccount').value);
+  $('netHint').textContent = (curType === 'Zinsen' && tax > 0 && g > 0)
+    ? `Gutschrift netto: ${fmt(round2(g - tax), acc && acc.currency)}` : '';
+}
+['fAmount', 'fTax'].forEach(id => $(id).addEventListener('input', updateHint));
+
+$('saveBtn').addEventListener('click', () => {
+  const account = $('fAccount').value;
+  const acc = accounts.find(a => a.name === account);
+  if (!acc) { toast('Bitte zuerst ein Konto hinzufügen'); return; }
+  const gross = parseNum($('fAmount').value);
+  if (!(gross > 0)) { toast('Bitte einen Betrag > 0 eingeben'); $('fAmount').focus(); return; }
+  const tax = curType === 'Zinsen' ? (parseNum($('fTax').value) || 0) : 0;
+  if (tax < 0 || tax >= gross) { toast('Steuern müssen kleiner als der Bruttozins sein'); return; }
+  const date = $('fDate').value || today();
+  entries.unshift({
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    type: curType, account, currency: acc.currency, date,
+    gross: round2(gross), tax: round2(tax), note: $('fNote').value.trim(), exported: null
+  });
+  store.set('pp.entries', entries);
+  store.set('pp.lastAccount', account);
+  $('fAmount').value = ''; $('fTax').value = ''; $('fNote').value = '';
+  updateHint(); render();
+  toast(`${curType} erfasst`);
+});
+
+// ---------- Listen ----------
+function entryHtml(e, withDelete) {
+  const net = round2(e.gross - e.tax);
+  const sign = isCredit(e.type) ? '+' : '−';
+  const d = new Date(e.date + 'T00:00').toLocaleDateString('de-CH');
+  const sub = [d, e.account, e.tax ? `Steuern ${fmt(e.tax, e.currency)}` : '', e.note].filter(Boolean).map(esc).join(' · ');
+  return `<div class="row entry"><div class="meta"><div class="title">${esc(e.type)}</div><div class="sub">${sub}</div></div>
+    <span class="amt ${isCredit(e.type) ? 'pos' : 'neg'}">${sign}${esc(fmt(net, e.currency))}</span>
+    ${withDelete ? `<button class="del" data-del="${e.id}" aria-label="Löschen">×</button>` : ''}</div>`;
+}
+function render() {
+  const pending = entries.filter(e => !e.exported), done = entries.filter(e => e.exported);
+  $('pendingBadge').textContent = `${pending.length} offen`;
+  $('pendingList').innerHTML = pending.length ? pending.map(e => entryHtml(e, true)).join('')
+    : '<div class="empty">Keine offenen Buchungen</div>';
+  $('exportBtn').disabled = !pending.length;
+  $('histCount').textContent = done.length ? `(${done.length})` : '';
+  $('historyList').innerHTML = done.length ? done.map(e => entryHtml(e, true)).join('')
+    : '<div class="empty">Noch nichts exportiert</div>';
+
+  const last = store.get('pp.lastAccount', '');
+  const sel = $('fAccount'), prev = sel.value || last;
+  sel.innerHTML = accounts.length ? accounts.map(a => `<option value="${esc(a.name)}">${esc(a.name)} (${esc(a.currency)})</option>`).join('')
+    : '<option value="">– kein Konto –</option>';
+  if (accounts.some(a => a.name === prev)) sel.value = prev;
+
+  $('accountList').innerHTML = accounts.length ? accounts.map((a, i) =>
+    `<div class="row acc-row"><div class="meta">${esc(a.name)}</div><span class="badge">${esc(a.currency)}</span>
+     <button class="del" data-delacc="${i}" aria-label="Konto entfernen">×</button></div>`).join('')
+    : '<div class="empty">Noch keine Konten</div>';
+}
+document.addEventListener('click', e => {
+  const d = e.target.closest('[data-del]');
+  if (d) {
+    if (!confirm('Buchung löschen?')) return;
+    entries = entries.filter(x => x.id !== d.dataset.del); store.set('pp.entries', entries); render(); return;
+  }
+  const a = e.target.closest('[data-delacc]');
+  if (a) { accounts.splice(Number(a.dataset.delacc), 1); store.set('pp.accounts', accounts); render(); }
+});
+$('clearHistBtn').addEventListener('click', () => {
+  if (!confirm('Alle exportierten Buchungen aus dem Verlauf löschen?')) return;
+  entries = entries.filter(e => !e.exported); store.set('pp.entries', entries); render();
+});
+$('mAddBtn').addEventListener('click', () => {
+  const name = $('mName').value.trim(), cur = $('mCur').value.trim().toUpperCase();
+  if (!name || !/^[A-Z]{3}$/.test(cur)) { toast('Name und 3-stellige Währung angeben'); return; }
+  if (!accounts.some(a => a.name === name)) accounts.push({ name, currency: cur, source: 'manuell' });
+  store.set('pp.accounts', accounts); $('mName').value = ''; render(); toast('Konto hinzugefügt');
+});
+
+// ---------- CSV-Export im PP-Format «Kontoumsätze» ----------
+function csvCell(s) { s = String(s ?? ''); return /[;"\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
+function buildCsv(list) {
+  // Spaltennamen = deutsche Feldnamen des PP-CSV-Imports → werden automatisch zugeordnet.
+  // Wert = Nettobetrag der Buchung; Steuern werden bei Zinsen als Steuer-Anteil gebucht.
+  const head = ['Datum', 'Typ', 'Wert', 'Buchungswährung', 'Steuern', 'Konto', 'Notiz'];
+  const rows = list.slice().sort((a, b) => a.date.localeCompare(b.date)).map(e => [
+    e.date, e.type, round2(e.gross - e.tax).toFixed(2), e.currency, e.tax ? e.tax.toFixed(2) : '', e.account, e.note
+  ]);
+  return [head, ...rows].map(r => r.map(csvCell).join(';')).join('\r\n') + '\r\n';
+}
+$('exportBtn').addEventListener('click', async () => {
+  const pending = entries.filter(e => !e.exported);
+  if (!pending.length) return;
+  const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
+  const name = `pp-buchungen-${stamp}.csv`;
+  const file = new File([buildCsv(pending)], name, { type: 'text/csv' });
+  let ok = false;
+  try {
+    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file] }); ok = true; }
+  } catch (err) { if (err && err.name === 'AbortError') return; }
+  if (!ok) {
+    const url = URL.createObjectURL(file), a = document.createElement('a');
+    a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    if (!confirm('CSV heruntergeladen. Buchungen als exportiert markieren?')) return;
+  }
+  const now = new Date().toISOString();
+  pending.forEach(e => e.exported = now);
+  store.set('pp.entries', entries); render();
+  toast(`${pending.length} Buchung(en) exportiert`);
+});
+
+// ---------- Konten aus der PP-Datei lesen (XML, Binär/Protobuf, ZIP) ----------
+$('loadFileBtn').addEventListener('click', () => $('fileInput').click());
+$('fileInput').addEventListener('change', async e => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  try {
+    const found = await readPortfolioFile(new Uint8Array(await f.arrayBuffer()));
+    const active = found.filter(a => !a.retired && a.name);
+    if (!active.length) throw new Error('Keine Konten in der Datei gefunden.');
+    const manual = accounts.filter(a => a.source === 'manuell' && !active.some(x => x.name === a.name));
+    accounts = [...active.map(a => ({ name: a.name, currency: a.currency || 'CHF', source: 'datei' })), ...manual];
+    store.set('pp.accounts', accounts); render();
+    $('fileHint').textContent = `${active.length} Konten aus «${f.name}» übernommen (${new Date().toLocaleString('de-CH')}).`;
+    toast(`${active.length} Konten geladen`);
+  } catch (err) {
+    $('fileHint').textContent = err.message;
+    toast('Datei konnte nicht gelesen werden');
+  }
+});
+
+const startsWith = (b, s) => s.split('').every((c, i) => b[i] === c.charCodeAt(0));
+async function readPortfolioFile(bytes) {
+  if (startsWith(bytes, 'PORTFOLIO'))
+    throw new Error('Die Datei ist passwortgeschützt (verschlüsselt) und kann hier nicht gelesen werden. Konten bitte manuell hinzufügen.');
+  if (startsWith(bytes, 'PK\x03\x04')) {
+    const entry = await unzipFirst(bytes);
+    return readPortfolioFile(entry);
+  }
+  if (startsWith(bytes, 'PPPBV1')) return parseProtobufAccounts(bytes.subarray(6));
+  const text = new TextDecoder('utf-8').decode(bytes);
+  if (/<client[\s>]/.test(text.slice(0, 2000))) return parseXmlAccounts(text);
+  throw new Error('Unbekanntes Dateiformat. Bitte die .xml- oder .portfolio-Datei von Portfolio Performance wählen.');
+}
+
+function parseXmlAccounts(text) {
+  const doc = new DOMParser().parseFromString(text, 'application/xml');
+  if (doc.querySelector('parsererror')) throw new Error('XML konnte nicht gelesen werden.');
+  const root = doc.documentElement;
+  const accs = [...root.children].find(n => n.tagName === 'accounts');
+  if (!accs) return [];
+  return [...accs.children].filter(n => n.tagName === 'account' && !n.hasAttribute('reference')).map(n => {
+    const child = tag => { const c = [...n.children].find(x => x.tagName === tag); return c ? c.textContent.trim() : ''; };
+    return { name: child('name'), currency: child('currencyCode'), retired: child('isRetired') === 'true' };
+  });
+}
+
+// Minimaler Protobuf-Leser: PClient.accounts = Feld 3, PAccount{uuid=1,name=2,currencyCode=3,isRetired=5}
+function* pbFields(buf) {
+  let p = 0;
+  const varint = () => { let r = 0, m = 1, b; do { b = buf[p++]; r += (b & 0x7f) * m; m *= 128; } while (b & 0x80); return r; };
+  while (p < buf.length) {
+    const key = varint(), field = Math.floor(key / 8), wt = key & 7;
+    if (wt === 0) yield { field, value: varint() };
+    else if (wt === 2) { const len = varint(); yield { field, bytes: buf.subarray(p, p + len) }; p += len; }
+    else if (wt === 1) p += 8;
+    else if (wt === 5) p += 4;
+    else throw new Error('Binärformat nicht lesbar.');
+  }
+}
+function parseProtobufAccounts(buf) {
+  const dec = new TextDecoder('utf-8'), out = [];
+  for (const f of pbFields(buf)) {
+    if (f.field !== 3 || !f.bytes) continue;
+    const a = { name: '', currency: '', retired: false };
+    for (const g of pbFields(f.bytes)) {
+      if (g.field === 2 && g.bytes) a.name = dec.decode(g.bytes);
+      else if (g.field === 3 && g.bytes) a.currency = dec.decode(g.bytes);
+      else if (g.field === 5) a.retired = !!g.value;
+    }
+    out.push(a);
+  }
+  return out;
+}
+
+// ZIP: erster Eintrag über das Central Directory (Java schreibt Data Descriptors)
+async function unzipFirst(b) {
+  const dv = new DataView(b.buffer, b.byteOffset, b.byteLength);
+  let eocd = -1;
+  for (let i = b.length - 22; i >= Math.max(0, b.length - 65557); i--) if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  if (eocd < 0) throw new Error('ZIP-Datei beschädigt.');
+  const cd = dv.getUint32(eocd + 16, true);
+  if (dv.getUint32(cd, true) !== 0x02014b50) throw new Error('ZIP-Datei beschädigt.');
+  const method = dv.getUint16(cd + 10, true), csize = dv.getUint32(cd + 20, true), lho = dv.getUint32(cd + 42, true);
+  const start = lho + 30 + dv.getUint16(lho + 26, true) + dv.getUint16(lho + 28, true);
+  const data = b.subarray(start, start + csize);
+  if (method === 0) return data;
+  if (method !== 8 || typeof DecompressionStream === 'undefined') throw new Error('ZIP-Komprimierung wird von diesem Browser nicht unterstützt.');
+  const stream = new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+// ---------- Start ----------
+$('fDate').value = today();
+$('fAccount').addEventListener('change', updateHint);
+setType('Zinsen');
+render();
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>
